@@ -4,6 +4,7 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as path from 'path';
 
 export class InfraStack extends cdk.Stack {
   public readonly eventsTableName: string;
@@ -38,7 +39,7 @@ export class InfraStack extends cdk.Stack {
     // ----------------------------------------------------
     const logTimeFunction = new lambdaNodejs.NodejsFunction(this, 'LogTimeFunction', {
         runtime: lambda.Runtime.NODEJS_20_X, 
-        entry: 'backend/logTime.ts', // 指定 TypeScript 源文件
+        entry: path.join(__dirname, '..', 'backend', 'logTime.ts'), // <--- 修正后的路径
         handler: 'handler',
         memorySize: 256,
         timeout: cdk.Duration.seconds(10),
