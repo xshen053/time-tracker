@@ -56,6 +56,9 @@ export class InfraStack extends cdk.Stack {
     // 5. Lambda Function Instances (Get Events - GET /events)
     const getEventsFunction = createNodejsFunction('GetEventsFunction', 'getEvents.ts', { });
 
+    const updateLogFunction = createNodejsFunction('UpdateLogFunction', 'updateLog.ts', { });
+    const deleteLogFunction = createNodejsFunction('DeleteLogFunction', 'deleteLog.ts', {});
+
     // 授予 CreateEventFunction 写入 Config 表的权限
     eventsConfigTable.grantWriteData(createEventFunction);
 
@@ -68,6 +71,8 @@ export class InfraStack extends cdk.Stack {
     // 2. 授予读取权限 (QueryLogFunction)
     eventsTable.grantReadData(queryLogFunction);    
 
+    eventsTable.grantWriteData(updateLogFunction);
+    eventsTable.grantWriteData(deleteLogFunction);
     // ----------------------------------------------------
     // III. API Gateway (接入层)
     // ----------------------------------------------------
@@ -98,7 +103,8 @@ export class InfraStack extends cdk.Stack {
     // 2. GET /log: 查询日志
     logResource.addMethod('GET', new apigateway.LambdaIntegration(queryLogFunction));
 
-    
+    logResource.addMethod('PUT', new apigateway.LambdaIntegration(updateLogFunction));
+    logResource.addMethod('DELETE', new apigateway.LambdaIntegration(deleteLogFunction));
     // ----------------------------------------------------
     // IV. 输出 (Outputs)
     // ----------------------------------------------------
