@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { postLog, fetchEvents, fetchLogs, createEvent, updateLog } from './api'
+import { postLog, fetchEvents, fetchLogs, createEvent, updateLog, deleteLog } from './api'
 import LogEditor from './components/LogEditor'
 
 const API = import.meta.env.VITE_API_ENDPOINT ?? 'http://localhost:3000'
@@ -15,6 +15,7 @@ export default function App() {
   const [logs, setLogs] = useState<LogItem[]>([])
   const [nextKey, setNextKey] = useState<string | undefined>(undefined)
   const [status, setStatus] = useState<string | null>(null)
+  const [loadingLogs, setLoadingLogs] = useState(false)
 
   async function loadEvents() {
     setStatus('loading events...')
@@ -56,21 +57,29 @@ export default function App() {
     setLogs([])
     setNextKey(undefined)
     setScreen('detail')
-    await loadLogs(ev.eventName)
+    await loadLogs(ev.eventName, undefined, true)
   }
 
-  async function loadLogs(eventName: string, next?: string) {
-    setStatus('loading logs...')
+  async function loadLogs(eventName: string, next?: string, replace: boolean = false) {
+  setStatus('loading logs...')
+  setLoadingLogs(true)
     try {
   const resp = await fetchLogs(API + '/log', eventName, next)
       // backend returns { data: [...], count, nextKey }
       if (resp && Array.isArray(resp.data)) {
-        setLogs(prev => [...prev, ...resp.data])
+        if (replace) {
+          setLogs(resp.data)
+        } else {
+          setLogs(prev => [...prev, ...resp.data])
+        }
       }
       setNextKey(resp.nextKey)
       setStatus('logs loaded')
     } catch (err: any) {
       setStatus('error: ' + (err.message || String(err)))
+    }
+    finally {
+      setLoadingLogs(false)
     }
   }
 
@@ -96,7 +105,7 @@ export default function App() {
       setStatus('log written')
       // clear and reload
       setLogText('')
-      await loadLogs(selectedEvent.eventName)
+  await loadLogs(selectedEvent.eventName, undefined, true)
     } catch (err: any) {
       setStatus('error: ' + (err.message || String(err)))
     }
@@ -178,6 +187,7 @@ export default function App() {
             <button onClick={backToList}>Back</button>
             <button onClick={() => loadLogs(selectedEvent.eventName, nextKey)} disabled={!nextKey} style={{ marginLeft: 8 }}>Load more</button>
           </div>
+          {loadingLogs && <div style={{ color: '#666', marginBottom: 8 }}>Reloading logs...</div>}
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {logs.map((l: any, i) => (
               <li key={i} className="log-item">
@@ -204,12 +214,22 @@ export default function App() {
                 {/* Edit controls */}
                 <LogEditor
                   log={l}
-                  onSave={async (updates) => {
+                  disabled={loadingLogs}
+                    onSave={async (updates) => {
                     try {
-                      await updateLog(API + '/update-log', l.PK, l.SK, updates)
+                      await updateLog(API + '/log', l.PK, l.SK, updates)
                       // reload logs for this event
-                      await loadLogs(selectedEvent!.eventName)
+                      await loadLogs(selectedEvent!.eventName, undefined, true)
                       setStatus('log updated')
+                    } catch (err: any) {
+                      setStatus('error: ' + (err.message || String(err)))
+                    }
+                  }}
+                  onDelete={async () => {
+                    try {
+                      await deleteLog(API + '/log', l.PK, l.SK)
+                      await loadLogs(selectedEvent!.eventName, undefined, true)
+                      setStatus('log deleted')
                     } catch (err: any) {
                       setStatus('error: ' + (err.message || String(err)))
                     }

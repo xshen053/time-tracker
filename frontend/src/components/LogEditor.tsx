@@ -3,9 +3,13 @@ import React, { useState } from 'react'
 type Props = {
   log: any
   onSave: (updates: { [k: string]: any }) => Promise<void>
+  onDelete?: () => Promise<void>
+  disabled?: boolean
 }
 
-export default function LogEditor({ log, onSave }: Props) {
+export default function LogEditor({ log, onSave, onDelete }: Props) {
+  // @ts-ignore
+  const disabled = (arguments[0] && arguments[0].disabled) || false
   const [editing, setEditing] = useState(false)
   // Helpers to normalize existing values into HTML input formats
   const parseDateToInput = (d: any, iso?: string) => {
@@ -55,8 +59,16 @@ export default function LogEditor({ log, onSave }: Props) {
     if (startTime !== log.startTime) updates.startTime = startTime
     if (endTime !== log.endTime) updates.endTime = endTime
     if (text !== log.text) updates.text = text
-    await onSave(updates)
+  await onSave(updates)
     setEditing(false)
+  }
+
+  async function remove() {
+    if (disabled) return
+    if (!confirm('Delete this log?')) return
+    if (typeof onDelete === 'function') {
+      await onDelete()
+    }
   }
 
   if (!editing) {
@@ -64,7 +76,7 @@ export default function LogEditor({ log, onSave }: Props) {
       <div>
         <div className="log-text">{String(log.text ?? '')}</div>
         <div style={{ marginTop: 6 }}>
-          <button onClick={() => setEditing(true)}>Edit</button>
+          <button onClick={() => setEditing(true)} disabled={disabled}>Edit</button>
         </div>
       </div>
     )
@@ -77,12 +89,13 @@ export default function LogEditor({ log, onSave }: Props) {
         <label>Start <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} /></label>
         <label>End <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} /></label>
       </div>
-      <div style={{ marginTop: 8 }}>
-        <textarea rows={3} style={{ width: '100%' }} value={text} onChange={e => setText(e.target.value)} />
+        <div style={{ marginTop: 8 }}>
+        <textarea rows={3} style={{ width: '100%' }} value={text} onChange={e => setText(e.target.value)} disabled={disabled} />
       </div>
       <div style={{ marginTop: 8 }}>
-        <button onClick={save}>Save</button>
-        <button onClick={() => setEditing(false)} style={{ marginLeft: 8 }}>Cancel</button>
+        <button onClick={save} disabled={disabled}>Save</button>
+  <button onClick={() => setEditing(false)} style={{ marginLeft: 8 }} disabled={disabled}>Cancel</button>
+  <button onClick={remove} style={{ marginLeft: 8, color: 'red' }} disabled={disabled}>Delete</button>
       </div>
     </div>
   )
