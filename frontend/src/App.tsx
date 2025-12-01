@@ -114,9 +114,19 @@ export default function App() {
             <button onClick={backToList}>Back</button>
             <button onClick={() => loadLogs(selectedEvent.eventName, nextKey)} disabled={!nextKey} style={{ marginLeft: 8 }}>Load more</button>
           </div>
-          <ul>
+          <ul style={{ listStyle: 'none', padding: 0 }}>
             {logs.map((l: any, i) => (
-              <li key={i}>{JSON.stringify(l)}</li>
+              <li key={i} className="log-item">
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div style={{ fontWeight: 600 }}>{l.startTime ?? l.isoStartTime ?? l.SK ?? ''}</div>
+                  <div style={{ color: '#666', fontSize: 12 }}>{l.logId ?? ''}</div>
+                </div>
+                <div className="log-text">{String(l.text ?? '')}</div>
+                <div style={{ marginTop: 6, color: '#444', fontSize: 12 }}>
+                  <span>{l.eventName ?? ''}</span>
+                  <span style={{ marginLeft: 12 }}>{l.date ?? ''}</span>
+                </div>
+              </li>
             ))}
           </ul>
         </section>
