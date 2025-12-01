@@ -47,7 +47,7 @@ export class InfraStack extends cdk.Stack {
             DYNAMODB_TABLE_NAME: eventsTable.tableName,
         },
         bundling: {
-            externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb', 'uuid'],
+            externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb'],
         }
     });
 
