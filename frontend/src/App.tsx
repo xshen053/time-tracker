@@ -73,6 +73,41 @@ export default function App() {
     }
   }
 
+  // Helpers to compute duration between isoStartTime and endTime
+  function parseEndDate(startIso: string | undefined, dateStr: string | undefined, endTimeStr: string | undefined) {
+    if (!startIso || !endTimeStr) return null
+    try {
+      // get date portion from start iso (YYYY-MM-DD)
+      const datePart = startIso.split('T')[0]
+      // endTimeStr format like '10:30:00 AM' or '10:30 AM'
+      const m = endTimeStr.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i)
+      if (!m) return null
+      let hh = parseInt(m[1], 10)
+      const mm = parseInt(m[2], 10)
+      const ss = m[3] ? parseInt(m[3], 10) : 0
+      const ampm = m[4]
+      if (ampm) {
+        const a = ampm.toUpperCase()
+        if (a === 'PM' && hh < 12) hh += 12
+        if (a === 'AM' && hh === 12) hh = 0
+      }
+      // Build ISO string in UTC using datePart and hh:mm:ss
+      const iso = `${datePart}T${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}Z`
+      return new Date(iso)
+    } catch (e) {
+      return null
+    }
+  }
+
+  function formatDuration(ms: number | null) {
+    if (ms === null || isNaN(ms)) return ''
+    const totalMinutes = Math.round(ms / 60000)
+    const hours = Math.floor(totalMinutes / 60)
+    const minutes = totalMinutes % 60
+    if (hours > 0) return `${hours}h ${minutes}m`
+    return `${minutes}m`
+  }
+
   function backToList() {
     setScreen('list')
     setSelectedEvent(null)
@@ -120,6 +155,22 @@ export default function App() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                   <div style={{ fontWeight: 600 }}>{l.startTime ?? l.isoStartTime ?? l.SK ?? ''}</div>
                   <div style={{ color: '#666', fontSize: 12 }}>{l.logId ?? ''}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 12, marginBottom: 6 }}>
+                  <div><strong>Start:</strong> {l.startTime ?? l.isoStartTime ?? ''}</div>
+                  <div><strong>End:</strong> {l.endTime ?? ''}</div>
+                  <div>
+                    <strong>Duration:</strong>{' '}
+                    {(() => {
+                      const startIso = l.isoStartTime ?? null
+                      const endDate = parseEndDate(l.isoStartTime, l.date, l.endTime)
+                      if (startIso && endDate) {
+                        const diff = endDate.getTime() - new Date(startIso).getTime()
+                        return formatDuration(diff)
+                      }
+                      return ''
+                    })()}
+                  </div>
                 </div>
                 <div className="log-text">{String(l.text ?? '')}</div>
                 <div style={{ marginTop: 6, color: '#444', fontSize: 12 }}>
