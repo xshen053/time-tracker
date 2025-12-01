@@ -5,9 +5,9 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as path from 'path';
+import { createEventsConfigTable, createTimeLogTable } from './tables/table-helpers';
 
 export class InfraStack extends cdk.Stack {
-  public readonly eventsTableName: string;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -17,107 +17,50 @@ export class InfraStack extends cdk.Stack {
     // ----------------------------------------------------
 
     // 1. DynamoDB Table (数据核心)
-    const eventsTable = new dynamodb.Table(this, 'EventsTable', {
-      partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
-      tableName: 'TimeTrackerEvents',
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-    });
+    const eventsTable = createTimeLogTable(this, 'EventsTable')
 
-    // 1.1. GSI (全局二级索引)
-    eventsTable.addGlobalSecondaryIndex({
-        indexName: 'GSI1',
-        partitionKey: { name: 'eventId', type: dynamodb.AttributeType.STRING }, 
-        sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING }, 
-        projectionType: dynamodb.ProjectionType.ALL,
-    });
-
-    this.eventsTableName = eventsTable.tableName;
-
-
-    const eventsConfigTable = new dynamodb.Table(this, 'EventsConfigTable', {
-          // 主键：eventId，确保每个 Event Name 只有一个条目
-          partitionKey: { name: 'eventId', type: dynamodb.AttributeType.STRING },
-          tableName: 'TimeTrackerEventsConfig',
-          removalPolicy: cdk.RemovalPolicy.DESTROY,
-          billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-        });
+    const eventsConfigTable = createEventsConfigTable(this, 'EventsConfigTable')
         
-        // 导出 EventsConfig 表名 (方便 Lambda 引用)
-        new cdk.CfnOutput(this, 'EventsConfigTableNameOutput', {
-          value: eventsConfigTable.tableName,
-        });    
+    // 1. 辅助函数：用于创建 Lambda NodejsFunction (需要定义在 InfraStack 类内)
+    const createNodejsFunction = (id: string, entryFile: string, tableEnv: any, extraModules: string[] = []): lambdaNodejs.NodejsFunction => {
+        // 合并所有环境所需的表名
+        const environment = {
+            ...tableEnv,
+            DYNAMODB_TABLE_NAME: eventsTable.tableName, // 假设 logTime 和 queryLog 需要
+            EVENTS_CONFIG_TABLE_NAME: eventsConfigTable.tableName, // 假设所有函数都需要
+        };
 
-
-    // 2. Lambda Function (Log Time - POST)
-    const logTimeFunction = new lambdaNodejs.NodejsFunction(this, 'LogTimeFunction', {
-        runtime: lambda.Runtime.NODEJS_20_X, 
-        entry: path.join(__dirname, '..', 'backend', 'logTime.ts'), 
-        handler: 'handler',
-        memorySize: 256,
-        timeout: cdk.Duration.seconds(10),
-        environment: {
-                DYNAMODB_TABLE_NAME: eventsTable.tableName,
-                EVENTS_CONFIG_TABLE_NAME: eventsConfigTable.tableName, 
-            },
-        bundling: {
-            externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb'],
-        }
-    });
-
-    // 3. Lambda Function (Query Log - GET)
-    const queryLogFunction = new lambdaNodejs.NodejsFunction(this, 'QueryLogFunction', {
-        runtime: lambda.Runtime.NODEJS_20_X, 
-        entry: path.join(__dirname, '..', 'backend', 'queryLog.ts'), 
-        handler: 'handler',
-        memorySize: 256,
-        timeout: cdk.Duration.seconds(10),
-        environment: {
-                DYNAMODB_TABLE_NAME: eventsTable.tableName,
-                EVENTS_CONFIG_TABLE_NAME: eventsConfigTable.tableName, 
-            },
-        bundling: {
-             // Query 函数也需要 SDK，所以也进行外部化处理
-            externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb'],
-        }
-    });
-    const createEventFunction = new lambdaNodejs.NodejsFunction(this, 'CreateEventFunction', {
+        return new lambdaNodejs.NodejsFunction(this, id, {
             runtime: lambda.Runtime.NODEJS_20_X, 
-            entry: path.join(__dirname, '..', 'backend', 'createEvent.ts'), // 需要创建此文件
+            entry: path.join(__dirname, '..', 'backend', entryFile), 
             handler: 'handler',
             memorySize: 256,
             timeout: cdk.Duration.seconds(10),
-            environment: {
-                EVENTS_CONFIG_TABLE_NAME: eventsConfigTable.tableName, // 注入配置表名
-            },
+            environment: environment,
             bundling: {
-                externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb', 'uuid'],
+                // 将所有 AWS SDKs 和 extraModules (如 uuid) 外部化
+                externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb', ...extraModules],
             }
-        });    
+        });
+    };
 
-    const getEventsFunction = new lambdaNodejs.NodejsFunction(this, 'GetEventsFunction', {
-            runtime: lambda.Runtime.NODEJS_20_X, 
-            entry: path.join(__dirname, '..', 'backend', 'getEvents.ts'), // 需要创建此文件
-            handler: 'handler',
-            memorySize: 256,
-            timeout: cdk.Duration.seconds(10),
-            environment: {
-                EVENTS_CONFIG_TABLE_NAME: eventsConfigTable.tableName, // 注入配置表名
-            },
-            bundling: {
-                externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb'],
-            }
-        });        
+    // 2. Lambda Function Instances (Log Time - POST)
+    const logTimeFunction = createNodejsFunction('LogTimeFunction', 'logTime.ts', { });
+    
+    // 3. Lambda Function Instances (Query Log - GET)
+    const queryLogFunction = createNodejsFunction('QueryLogFunction', 'queryLog.ts', { }); 
+
+    // 4. Lambda Function Instances (Create Event - POST /events)
+    const createEventFunction = createNodejsFunction('CreateEventFunction', 'createEvent.ts', { }); // CreateEvent needs UUID
+
+    // 5. Lambda Function Instances (Get Events - GET /events)
+    const getEventsFunction = createNodejsFunction('GetEventsFunction', 'getEvents.ts', { });
 
     // 授予 CreateEventFunction 写入 Config 表的权限
     eventsConfigTable.grantWriteData(createEventFunction);
 
     // 授予 GetEventsFunction 读取 Config 表的权限
     eventsConfigTable.grantReadData(getEventsFunction);
-    // ----------------------------------------------------
-    // II. IAM 权限授予 (Permissions Granting)
-    // ----------------------------------------------------
 
     // 1. 授予写入权限 (LogTimeFunction)
     eventsTable.grantWriteData(logTimeFunction); 
@@ -164,6 +107,12 @@ export class InfraStack extends cdk.Stack {
         value: api.url,
         description: 'The API Gateway endpoint for logging time records.',
     });
+
+    // 导出 EventsConfig 表名 (方便 Lambda 引用)
+    new cdk.CfnOutput(this, 'EventsConfigTableNameOutput', {
+        value: eventsConfigTable.tableName,
+    });    
+
     new cdk.CfnOutput(this, 'DynamoDBTableNameOutput', {
       value: eventsTable.tableName,
     });
