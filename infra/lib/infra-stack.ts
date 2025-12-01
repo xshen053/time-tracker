@@ -49,7 +49,7 @@ export class InfraStack extends cdk.Stack {
         },
         bundling: {
             // 确保依赖被正确打包，尤其是 uuid 和 AWS SDKs
-            externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb', 'uuid'],
+            externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb'],
         }
     });
 
