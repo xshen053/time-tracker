@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { postLog, fetchEvents, fetchLogs, createEvent } from './api'
+import { postLog, fetchEvents, fetchLogs, createEvent, updateLog } from './api'
+import LogEditor from './components/LogEditor'
 
 const API = import.meta.env.VITE_API_ENDPOINT ?? 'http://localhost:3000'
 
@@ -200,7 +201,20 @@ export default function App() {
                     })()}
                   </div>
                 </div>
-                <div className="log-text">{String(l.text ?? '')}</div>
+                {/* Edit controls */}
+                <LogEditor
+                  log={l}
+                  onSave={async (updates) => {
+                    try {
+                      await updateLog(API + '/update-log', l.PK, l.SK, updates)
+                      // reload logs for this event
+                      await loadLogs(selectedEvent!.eventName)
+                      setStatus('log updated')
+                    } catch (err: any) {
+                      setStatus('error: ' + (err.message || String(err)))
+                    }
+                  }}
+                />
                 <div style={{ marginTop: 6, color: '#444', fontSize: 12 }}>
                   <span>{l.eventName ?? ''}</span>
                   <span style={{ marginLeft: 12 }}>{l.date ?? ''}</span>
