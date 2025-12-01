@@ -73,6 +73,34 @@ export default function App() {
     }
   }
 
+  // New log form state (only used on detail screen)
+  const [logDate, setLogDate] = useState('')
+  const [logStartTime, setLogStartTime] = useState('09:00')
+  const [logEndTime, setLogEndTime] = useState('10:00')
+  const [logText, setLogText] = useState('')
+
+  async function submitNewLog() {
+    if (!selectedEvent) return
+    if (!logDate || !logStartTime || !logEndTime) return setStatus('fill date/start/end')
+    setStatus('writing log...')
+    try {
+      const payload = {
+        eventName: selectedEvent.eventName,
+        date: logDate,
+        startTime: logStartTime,
+        endTime: logEndTime,
+        text: logText,
+      }
+      await postLog(API + '/log', payload)
+      setStatus('log written')
+      // clear and reload
+      setLogText('')
+      await loadLogs(selectedEvent.eventName)
+    } catch (err: any) {
+      setStatus('error: ' + (err.message || String(err)))
+    }
+  }
+
   // Helpers to compute duration between isoStartTime and endTime
   function parseEndDate(startIso: string | undefined, dateStr: string | undefined, endTimeStr: string | undefined) {
     if (!startIso || !endTimeStr) return null
@@ -180,6 +208,30 @@ export default function App() {
               </li>
             ))}
           </ul>
+
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed #ddd' }}>
+            <h3>Add new log</h3>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <label>
+                Date
+                <input type="date" value={logDate} onChange={e => setLogDate(e.target.value)} />
+              </label>
+              <label>
+                Start
+                <input type="time" value={logStartTime} onChange={e => setLogStartTime(e.target.value)} />
+              </label>
+              <label>
+                End
+                <input type="time" value={logEndTime} onChange={e => setLogEndTime(e.target.value)} />
+              </label>
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <textarea rows={4} style={{ width: '100%' }} placeholder="Log text" value={logText} onChange={e => setLogText(e.target.value)} />
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <button onClick={submitNewLog}>Add Log</button>
+            </div>
+          </div>
         </section>
       )}
 
