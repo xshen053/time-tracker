@@ -50,7 +50,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
                 ':eId': eventId,
             },
             ScanIndexForward: false,
-            Limit,
+            Limit : limit,
             ExclusiveStartKey: exclusiveStartKeyObject,
         });
 
