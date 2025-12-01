@@ -82,8 +82,39 @@ export class InfraStack extends cdk.Stack {
             externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb'],
         }
     });
+    const createEventFunction = new lambdaNodejs.NodejsFunction(this, 'CreateEventFunction', {
+            runtime: lambda.Runtime.NODEJS_20_X, 
+            entry: path.join(__dirname, '..', 'backend', 'createEvent.ts'), // 需要创建此文件
+            handler: 'handler',
+            memorySize: 256,
+            timeout: cdk.Duration.seconds(10),
+            environment: {
+                EVENTS_CONFIG_TABLE_NAME: eventsConfigTable.tableName, // 注入配置表名
+            },
+            bundling: {
+                externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb', 'uuid'],
+            }
+        });    
 
+    const getEventsFunction = new lambdaNodejs.NodejsFunction(this, 'GetEventsFunction', {
+            runtime: lambda.Runtime.NODEJS_20_X, 
+            entry: path.join(__dirname, '..', 'backend', 'getEvents.ts'), // 需要创建此文件
+            handler: 'handler',
+            memorySize: 256,
+            timeout: cdk.Duration.seconds(10),
+            environment: {
+                EVENTS_CONFIG_TABLE_NAME: eventsConfigTable.tableName, // 注入配置表名
+            },
+            bundling: {
+                externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb'],
+            }
+        });        
 
+    // 授予 CreateEventFunction 写入 Config 表的权限
+    eventsConfigTable.grantWriteData(createEventFunction);
+
+    // 授予 GetEventsFunction 读取 Config 表的权限
+    eventsConfigTable.grantReadData(getEventsFunction);
     // ----------------------------------------------------
     // II. IAM 权限授予 (Permissions Granting)
     // ----------------------------------------------------
@@ -94,11 +125,6 @@ export class InfraStack extends cdk.Stack {
     // 2. 授予读取权限 (QueryLogFunction)
     eventsTable.grantReadData(queryLogFunction);    
 
-    // 授予 Lambda 写入新配置表的权限 (LogTimeFunction 需要写入)
-    eventsConfigTable.grantWriteData(logTimeFunction);
-
-    // 授予 Lambda 读取新配置表的权限 (QueryLogFunction 需要读取)
-    eventsConfigTable.grantReadData(queryLogFunction);
     // ----------------------------------------------------
     // III. API Gateway (接入层)
     // ----------------------------------------------------
@@ -114,7 +140,15 @@ export class InfraStack extends cdk.Stack {
 
     // 定义 /log 资源
     const logResource = api.root.addResource('log');
-    
+
+    const eventsResource = api.root.addResource('events');
+
+    // 2. POST /events: 创建 Event
+    eventsResource.addMethod('POST', new apigateway.LambdaIntegration(createEventFunction));
+
+    // 3. GET /events: 查询 Event 列表
+    eventsResource.addMethod('GET', new apigateway.LambdaIntegration(getEventsFunction));
+
     // 1. POST /log: 写入日志
     logResource.addMethod('POST', new apigateway.LambdaIntegration(logTimeFunction));
 
