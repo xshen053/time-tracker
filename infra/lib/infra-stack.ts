@@ -36,6 +36,20 @@ export class InfraStack extends cdk.Stack {
     this.eventsTableName = eventsTable.tableName;
 
 
+    const eventsConfigTable = new dynamodb.Table(this, 'EventsConfigTable', {
+          // 主键：eventId，确保每个 Event Name 只有一个条目
+          partitionKey: { name: 'eventId', type: dynamodb.AttributeType.STRING },
+          tableName: 'TimeTrackerEventsConfig',
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+          billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        });
+        
+        // 导出 EventsConfig 表名 (方便 Lambda 引用)
+        new cdk.CfnOutput(this, 'EventsConfigTableNameOutput', {
+          value: eventsConfigTable.tableName,
+        });    
+
+
     // 2. Lambda Function (Log Time - POST)
     const logTimeFunction = new lambdaNodejs.NodejsFunction(this, 'LogTimeFunction', {
         runtime: lambda.Runtime.NODEJS_20_X, 
@@ -44,8 +58,9 @@ export class InfraStack extends cdk.Stack {
         memorySize: 256,
         timeout: cdk.Duration.seconds(10),
         environment: {
-            DYNAMODB_TABLE_NAME: eventsTable.tableName,
-        },
+                DYNAMODB_TABLE_NAME: eventsTable.tableName,
+                EVENTS_CONFIG_TABLE_NAME: eventsConfigTable.tableName, 
+            },
         bundling: {
             externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb'],
         }
@@ -59,8 +74,9 @@ export class InfraStack extends cdk.Stack {
         memorySize: 256,
         timeout: cdk.Duration.seconds(10),
         environment: {
-            DYNAMODB_TABLE_NAME: eventsTable.tableName, 
-        },
+                DYNAMODB_TABLE_NAME: eventsTable.tableName,
+                EVENTS_CONFIG_TABLE_NAME: eventsConfigTable.tableName, 
+            },
         bundling: {
              // Query 函数也需要 SDK，所以也进行外部化处理
             externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb'],
@@ -78,7 +94,11 @@ export class InfraStack extends cdk.Stack {
     // 2. 授予读取权限 (QueryLogFunction)
     eventsTable.grantReadData(queryLogFunction);    
 
+    // 授予 Lambda 写入新配置表的权限 (LogTimeFunction 需要写入)
+    eventsConfigTable.grantWriteData(logTimeFunction);
 
+    // 授予 Lambda 读取新配置表的权限 (QueryLogFunction 需要读取)
+    eventsConfigTable.grantReadData(queryLogFunction);
     // ----------------------------------------------------
     // III. API Gateway (接入层)
     // ----------------------------------------------------
