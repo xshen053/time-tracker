@@ -13,10 +13,11 @@ export class InfraStack extends cdk.Stack {
     super(scope, id, props);
 
     // ----------------------------------------------------
-    // 1. DynamoDB: 存储事件元数据和时间日志 (单表设计)
+    // I. 资源定义 (Resource Definition)
     // ----------------------------------------------------
+
+    // 1. DynamoDB Table (数据核心)
     const eventsTable = new dynamodb.Table(this, 'EventsTable', {
-      // 主键：用于写入分散和日志排序
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
       tableName: 'TimeTrackerEvents',
@@ -24,7 +25,7 @@ export class InfraStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
     });
 
-    // **新增 GSI (全局二级索引)：用于按 eventId 查询**
+    // 1.1. GSI (全局二级索引)
     eventsTable.addGlobalSecondaryIndex({
         indexName: 'GSI1',
         partitionKey: { name: 'eventId', type: dynamodb.AttributeType.STRING }, 
@@ -34,31 +35,54 @@ export class InfraStack extends cdk.Stack {
 
     this.eventsTableName = eventsTable.tableName;
 
-    // ----------------------------------------------------
-    // 2. Lambda Function: LogTimeFunction (API 后端逻辑)
-    // ----------------------------------------------------
+
+    // 2. Lambda Function (Log Time - POST)
     const logTimeFunction = new lambdaNodejs.NodejsFunction(this, 'LogTimeFunction', {
         runtime: lambda.Runtime.NODEJS_20_X, 
-        entry: path.join(__dirname, '..', 'backend', 'logTime.ts'), // <--- 修正后的路径
+        entry: path.join(__dirname, '..', 'backend', 'logTime.ts'), 
         handler: 'handler',
         memorySize: 256,
         timeout: cdk.Duration.seconds(10),
         environment: {
-            // 注入 DynamoDB 表名
             DYNAMODB_TABLE_NAME: eventsTable.tableName,
         },
         bundling: {
-            // 确保依赖被正确打包，尤其是 uuid 和 AWS SDKs
+            externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb', 'uuid'],
+        }
+    });
+
+    // 3. Lambda Function (Query Log - GET)
+    const queryLogFunction = new lambdaNodejs.NodejsFunction(this, 'QueryLogFunction', {
+        runtime: lambda.Runtime.NODEJS_20_X, 
+        entry: path.join(__dirname, '..', 'backend', 'queryLog.ts'), 
+        handler: 'handler',
+        memorySize: 256,
+        timeout: cdk.Duration.seconds(10),
+        environment: {
+            DYNAMODB_TABLE_NAME: eventsTable.tableName, 
+        },
+        bundling: {
+             // Query 函数也需要 SDK，所以也进行外部化处理
             externalModules: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb'],
         }
     });
 
-    // 授予 Lambda 写入 DynamoDB 表的权限 (必须！)
+
+    // ----------------------------------------------------
+    // II. IAM 权限授予 (Permissions Granting)
+    // ----------------------------------------------------
+
+    // 1. 授予写入权限 (LogTimeFunction)
     eventsTable.grantWriteData(logTimeFunction); 
     
+    // 2. 授予读取权限 (QueryLogFunction)
+    eventsTable.grantReadData(queryLogFunction);    
+
+
     // ----------------------------------------------------
-    // 3. API Gateway: 创建 REST API 端点
+    // III. API Gateway (接入层)
     // ----------------------------------------------------
+
     const api = new apigateway.RestApi(this, 'TimeTrackerApi', {
         restApiName: 'TimeTrackerService',
         description: 'Service for logging user activity time.',
@@ -68,13 +92,20 @@ export class InfraStack extends cdk.Stack {
         },
     });
 
-    // 定义 /log 资源，并将 Lambda 函数与 POST 方法集成
+    // 定义 /log 资源
     const logResource = api.root.addResource('log');
+    
+    // 1. POST /log: 写入日志
     logResource.addMethod('POST', new apigateway.LambdaIntegration(logTimeFunction));
 
+    // 2. GET /log: 查询日志
+    logResource.addMethod('GET', new apigateway.LambdaIntegration(queryLogFunction));
+
+    
     // ----------------------------------------------------
-    // 4. CDK 输出 (导出 API Endpoint URL)
+    // IV. 输出 (Outputs)
     // ----------------------------------------------------
+    
     new cdk.CfnOutput(this, 'ApiGatewayEndpoint', {
         value: api.url,
         description: 'The API Gateway endpoint for logging time records.',
