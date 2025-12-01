@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { postLog, fetchEvents, fetchLogs } from './api'
+import { postLog, fetchEvents, fetchLogs, createEvent } from './api'
 
 const API = import.meta.env.VITE_API_ENDPOINT ?? 'http://localhost:3000'
 
@@ -22,6 +22,22 @@ export default function App() {
       const list = Array.isArray(resp.events) ? resp.events : []
       setEvents(list)
       setStatus('events loaded')
+    } catch (err: any) {
+      setStatus('error: ' + (err.message || String(err)))
+    }
+  }
+
+  // create new event
+  const [newEventName, setNewEventName] = useState('')
+  async function submitNewEvent() {
+    if (!newEventName) return setStatus('enter event name')
+    setStatus('creating event...')
+    try {
+      await createEvent(API + '/events', newEventName)
+      setNewEventName('')
+      setStatus('event created')
+      // refresh
+      await loadEvents()
     } catch (err: any) {
       setStatus('error: ' + (err.message || String(err)))
     }
@@ -73,6 +89,12 @@ export default function App() {
           <h2>Events</h2>
           <div style={{ marginBottom: 8 }}>
             <button onClick={loadEvents}>Load Events</button>
+          </div>
+
+          <div style={{ marginTop: 12, marginBottom: 12 }}>
+            <h3>Create event</h3>
+            <input placeholder="Event name" value={newEventName} onChange={e => setNewEventName(e.target.value)} />
+            <button style={{ marginLeft: 8 }} onClick={submitNewEvent}>Create</button>
           </div>
           <ul>
             {events.map((ev) => (
