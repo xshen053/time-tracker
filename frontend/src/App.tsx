@@ -126,15 +126,21 @@ export default function App() {
   function parseEndDate(startIso: string | undefined, dateStr: string | undefined, endTimeStr: string | undefined) {
     if (!endTimeStr) return null
     try {
-      // If we have a start ISO, use its date portion; otherwise use provided dateStr
-      const datePart = startIso ? String(startIso).split('T')[0] : (dateStr ?? '')
-      // If endTimeStr already looks like an ISO time, try parsing directly
-      if (/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:?\d{0,2}Z?/.test(endTimeStr)) {
-        const dt = new Date(endTimeStr)
+      const raw = String(endTimeStr).trim()
+      // If it's a full ISO (with date), parse directly
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:?\d{0,2}Z?$/.test(raw)) {
+        const dt = new Date(raw)
         if (!isNaN(dt.getTime())) return dt
       }
-      // endTimeStr format like '10:30:00 AM' or '10:30 AM' or '17:30'
-      const m = endTimeStr.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i)
+
+      // If it's a time with trailing Z like '01:30:00Z', remove trailing Z and treat as time
+      const timeOnly = raw.endsWith('Z') && !raw.includes('T') ? raw.replace(/Z$/,'') : raw
+
+      // get date portion
+      const datePart = startIso ? String(startIso).split('T')[0] : (dateStr ?? '')
+
+      // match hh:mm[:ss] [AM|PM]
+      const m = timeOnly.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i)
       if (!m) return null
       let hh = parseInt(m[1], 10)
       const mm = parseInt(m[2], 10)
@@ -356,13 +362,8 @@ export default function App() {
                   <div>
                     <strong>Duration:</strong>{' '}
                     {(() => {
-                      const startIso = l.isoStartTime ?? null
-                      const endDate = parseEndDate(l.isoStartTime, l.date, l.endTime)
-                      if (startIso && endDate) {
-                        const diff = endDate.getTime() - new Date(startIso).getTime()
-                        return formatDuration(diff)
-                      }
-                      return ''
+                      const { durationMs } = computeTimes(l)
+                      return durationMs != null ? formatDuration(durationMs) : ''
                     })()}
                   </div>
                 </div>
