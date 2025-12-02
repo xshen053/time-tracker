@@ -182,7 +182,9 @@ export default function App() {
 
     // end: try endTime; if looks like ISO, parse; else compose from date + endTime
     let end: Date | null = null
-    if (item.endTime) {
+    if (item.isoEndTime) {
+      end = new Date(item.isoEndTime)
+    } else if (item.endTime) {
       const e = String(item.endTime)
       if (/\d{4}-\d{2}-\d{2}T/.test(e)) {
         end = new Date(e)
