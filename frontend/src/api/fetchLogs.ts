@@ -1,10 +1,11 @@
-export async function fetchLogs(url: string, eventName: string, nextKey?: string) {
+export async function fetchLogs(url: string, eventName: string, nextKey?: string, date?: string) {
   // Build query string using encodeURIComponent so spaces become %20 (not '+')
   // Use URL as base in case `url` is relative or absolute.
   const base = typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
   const q = new URL(url, base)
   const params: string[] = []
   params.push('eventName=' + encodeURIComponent(eventName))
+  if (date) params.push('date=' + encodeURIComponent(date))
   if (nextKey) params.push('nextKey=' + encodeURIComponent(nextKey))
   q.search = params.join('&')
 

@@ -20,7 +20,7 @@ const buildUpdateExpression = (updates: { [key: string]: any }) => {
     const updateExpressionParts: string[] = [];
     
     // 允许修改的字段白名单（确保用户不能修改PK, SK, 或 eventId）
-    const allowedFields = ['eventName', 'startTime', 'endTime', 'date', 'text', 'isoStartTime']; 
+    const allowedFields = ['eventName', 'startTime', 'endTime', 'date', 'text', 'isoStartTime', 'isoEndTime']; 
     let valueIndex = 0;
 
     for (const key of allowedFields) {

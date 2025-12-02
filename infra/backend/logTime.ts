@@ -53,6 +53,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         const eventId = getEventId(eventName);
         const logId = uuidv4();
         const isoStartTime = getIsoTimestamp(date, startTime);
+        const isoEndTime = getIsoTimestamp(date, endTime);
 
         // PK = shard
         const shard = Math.floor(Math.random() * 10);
@@ -70,6 +71,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
             endTime,
             text: text || "",
             isoStartTime,
+            isoEndTime,
             dataType: "LOG",
         };
 

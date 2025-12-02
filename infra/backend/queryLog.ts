@@ -23,8 +23,10 @@ const getEventId = (name: string): string => {
 // ----------------------------------------------------------------------
 export const handler: APIGatewayProxyHandler = async (event) => {
     try {
-        const eventName = event.queryStringParameters?.eventName;
-        const exclusiveStartKey = event.queryStringParameters?.nextKey;
+    const eventName = event.queryStringParameters?.eventName;
+    const exclusiveStartKey = event.queryStringParameters?.nextKey;
+    // Optional date filter in YYYY-MM-DD (or YYYY/MM/DD) to restrict results to that UTC date
+    const dateFilterRaw = event.queryStringParameters?.date;
         const limit = 100;
 
         if (!eventName) {
@@ -42,13 +44,28 @@ export const handler: APIGatewayProxyHandler = async (event) => {
             exclusiveStartKeyObject = JSON.parse(decodedKey);
         }
 
+        // Build query parameters. If a date filter is provided, use a SK range query for efficiency.
+        const exprAttrValues: any = { ':eId': eventId };
+        let keyCondition = 'eventId = :eId';
+
+        if (dateFilterRaw) {
+            // Normalize date format to YYYY-MM-DD
+            const normalized = String(dateFilterRaw).trim().replace(/\//g, '-')
+            // basic sanity check YYYY-MM-DD
+            if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+                const startIso = `${normalized}T00:00:00Z`;
+                const endIso = `${normalized}T23:59:59Z`;
+                exprAttrValues[':start'] = `TIME#${startIso}`;
+                exprAttrValues[':end'] = `TIME#${endIso}`;
+                keyCondition = 'eventId = :eId AND SK BETWEEN :start AND :end';
+            }
+        }
+
         const command = new QueryCommand({
             TableName: DYNAMODB_TABLE_NAME,
             IndexName: GSI_NAME,
-            KeyConditionExpression: 'eventId = :eId',
-            ExpressionAttributeValues: {
-                ':eId': eventId,
-            },
+            KeyConditionExpression: keyCondition,
+            ExpressionAttributeValues: exprAttrValues,
             ScanIndexForward: false,
             Limit : limit,
             ExclusiveStartKey: exclusiveStartKeyObject,

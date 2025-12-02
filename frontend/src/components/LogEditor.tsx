@@ -55,11 +55,35 @@ export default function LogEditor({ log, onSave, onDelete }: Props) {
 
   async function save() {
     const updates: any = {}
-    if (date !== log.date) updates.date = date
-    if (startTime !== log.startTime) updates.startTime = startTime
-    if (endTime !== log.endTime) updates.endTime = endTime
+    // If ISO timestamp exists, convert local inputs to UTC equivalents for storage
+    const toUtcDate = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`
+    const toUtcTime = (d: Date) => `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`
+
+    if (date !== log.date) {
+      updates.date = date
+    }
+    if (startTime !== log.startTime) {
+      if (date) {
+        const localStart = new Date(`${date}T${startTime}`)
+        updates.startTime = toUtcTime(localStart)
+        // If no date update provided, keep supplied local date converted to UTC date
+        if (!updates.date) updates.date = toUtcDate(localStart)
+      } else {
+        updates.startTime = startTime
+      }
+    }
+    if (endTime !== log.endTime) {
+      if (date) {
+  const localEnd = new Date(`${date}T${endTime}`)
+  updates.endTime = toUtcTime(localEnd)
+  updates.isoEndTime = localEnd.toISOString()
+  if (!updates.date) updates.date = toUtcDate(localEnd)
+      } else {
+        updates.endTime = endTime
+      }
+    }
     if (text !== log.text) updates.text = text
-  await onSave(updates)
+    await onSave(updates)
     setEditing(false)
   }
 
