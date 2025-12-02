@@ -327,8 +327,19 @@ export default function App() {
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {todayItems.map((it: any, idx) => (
               <li key={idx} className="log-item">
-                <div style={{ fontWeight: 700 }}>{it.isoStartTime ? new Date(it.isoStartTime).toLocaleTimeString() : (it.startTime ?? (it.SK ?? ''))}</div>
-                <div style={{ color: '#666' }}>{it.eventName}</div>
+                {(() => {
+                  const { start, end, durationMs } = computeTimes(it)
+                  return (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontWeight: 700 }}>{start ? start.toLocaleTimeString() : (it.isoStartTime ? new Date(it.isoStartTime).toLocaleTimeString() : (it.startTime ?? (it.SK ?? '')))}</div>
+                      <div style={{ color: '#666' }}>{it.eventName}</div>
+                      <div style={{ textAlign: 'right', color: '#333', fontSize: 12 }}>
+                        <div><strong>End:</strong> {end ? end.toLocaleTimeString() : (it.endTime ?? '')}</div>
+                        <div><strong>Dur:</strong> {durationMs != null ? formatDuration(durationMs) : ''}</div>
+                      </div>
+                    </div>
+                  )
+                })()}
                 <div className="log-text" style={{ marginTop: 6 }}>{it.text}</div>
               </li>
             ))}
